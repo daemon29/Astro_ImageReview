@@ -1,0 +1,124 @@
+// This config is a little messy because it needs to work
+// for both our library and our example app in /examples.
+// A good "@TODO" item would be to separate the linting/bundling
+// for them.
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+
+  // eslint-plugin-prettier
+  // - prettier
+  //
+  // @typescript-eslint/eslint-plugin
+  // - @typescript-eslint
+  //
+  //
+  // eslint-plugin-import
+  // - import
+  "plugins": [
+    "@typescript-eslint/eslint-plugin",
+    "import",
+    "eslint-plugin-tsdoc",
+    "prettier"
+  ],
+
+  // Order matters here. Last will override
+  // eslint-config-prettier (only turns rules off)
+  // - prettier                     # eslint conflicts
+  // - prettier/react               # react conflicts
+  // - prettier/@typescript-eslint  # typescript conflicts
+  //
+  // eslint-plugin-prettier
+  // - plugin:prettier/recommended
+  //
+  // eslint-plugin-react
+  // - plugin:react/recommended
+  //
+  // eslint-plugin-react-hooks
+  // - plugin:react-hooks/recommended
+  //
+  // @typescript-eslint/eslint-plugin
+  // -
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    // sets up the plugin AND eslint-config-prettier
+    "plugin:prettier/recommended"
+  ],
+
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "module",
+    "project": "./tsconfig.json",
+    "tsconfigRootDir": "./"
+  },
+  "ignorePatterns": ["packages/docs"],
+  "rules": {
+    // Enforce consistent brace style for all control statements for readability
+    "curly": "error",
+    "tsdoc/syntax": "warn",
+    "@typescript-eslint/ban-ts-comment": "off",
+    "import/no-cycle": "error",
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    // note you must disable the base rule
+    // as it can report incorrect errors
+    "no-unused-vars": "off",
+    // Allow skipping unused variables in params calls by using _Name
+    "@typescript-eslint/no-unused-vars": [
+      "warn", // or "error"
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "import/extensions": [
+      "error",
+      "ignorePackages",
+      {
+        "js": "never",
+        "jsx": "never",
+        "ts": "never",
+        "tsx": "never"
+      }
+    ],
+    "import/prefer-default-export": "off",
+    // eslint-plugin-prettier
+    "prettier/prettier": [
+      "error",
+      {
+        "endOfLine": "auto",
+        "printWidth": 80
+      }
+    ],
+    "no-undef": "warn"
+  },
+
+  "env": {
+    "es6": true,
+    "browser": true,
+    "node": true
+  },
+
+  "settings": {
+    "react": {
+      "version": "detect"
+    },
+    "import/resolver": {
+      "node": {
+        "extensions": [".js", ".jsx", ".ts", ".tsx"]
+      }
+    }
+  },
+
+  "globals": {
+    "context": true,
+    "assert": true,
+    "SharedArrayBuffer": true
+  }
+}

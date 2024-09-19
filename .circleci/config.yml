@@ -1,0 +1,159 @@
+# Use the latest 2.1 version of CircleCI pipeline processing engine, see https://circleci.com/docs/2.0/configuration-reference/
+version: 2.1
+
+defaults: &defaults
+  working_directory: ~/repo
+  # https://circleci.com/docs/2.0/circleci-images/#language-image-variants
+  docker:
+    - image: cimg/node:18.19.0-browsers
+      environment:
+        TERM: xterm # Enable colors in term
+
+jobs:
+  CHECKOUT:
+    <<: *defaults
+    steps:
+      - checkout
+      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/repo/.npmrc
+      - restore_cache:
+          name: Restore Package Cache
+          keys:
+            - packages-v1-{{ .Branch }}-{{ checksum "yarn.lock" }}
+            - packages-v1-{{ .Branch }}-
+            - packages-v1-
+      # Was, todo restore it - run: yarn install --frozen-lockfile
+      - run: yarn install --frozen-lockfile
+      - save_cache:
+          name: Save Package Cache
+          paths:
+            - ~/.cache/yarn
+          key: packages-v1-{{ .Branch }}-{{ checksum "yarn.lock" }}
+      - persist_to_workspace:
+          root: ~/repo
+          paths: .
+
+  BUILD:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          name: 'Perform the versioning before build'
+          command: node ./version.mjs
+      - run: yarn build
+      - persist_to_workspace:
+          root: ~/repo
+          paths:
+            - packages/core/dist
+            - packages/tools/dist
+            - packages/streaming-image-volume-loader/dist
+            - packages/adapters/dist
+            - packages/dicomImageLoader/dist
+            - packages/nifti-volume-loader/dist
+            - version.txt
+            - commit.txt
+            - version.json
+
+  API_CHECK:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - run: yarn run api-check
+
+  # https://circleci.com/docs/2.0/collect-test-data/#karma
+  TEST:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - run: mkdir ~/junit
+      - run:
+          command: yarn run test:unit:ci
+          environment:
+            JUNIT_REPORT_PATH: ./junit/
+            JUNIT_REPORT_NAME: test-results.xml
+          when: always
+      - store_test_results:
+          path: ./junit
+      - store_artifacts:
+          path: ./junit
+      - persist_to_workspace:
+          root: ~/repo
+          paths:
+            - coverage
+            - junit
+
+  NPM_PUBLISH:
+    <<: *defaults
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          name: Avoid hosts unknown for github
+          command:
+            mkdir ~/.ssh/ && echo -e "Host github.com\n\tStrictHostKeyChecking
+            no\n" > ~/.ssh/config
+      - add_ssh_keys:
+          fingerprints: 7e:0f:5b:bb:e3:7a:2e:2f:b4:85:bd:66:09:69:cb:f2
+      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+      - run: git config --global user.email "contact@ohif.org"
+      - run: git config --global user.name "ohif-bot"
+      - run:
+          name: publish package versions
+          command: |
+            node ./publish-version.mjs
+      - run:
+          name: Again set the NPM registry (was deleted in the version script)
+          command:
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/repo/.npmrc
+      - run:
+          name: publish package dist
+          command: |
+            node ./publish-package.mjs
+
+workflows:
+  version: 2
+
+  # PULL REQUEST
+  PULL_REQUEST:
+    jobs:
+      - CHECKOUT:
+          filters:
+            branches:
+              ignore:
+                - main
+                - feature/*
+                - hotfix/*
+      - BUILD:
+          requires:
+            - CHECKOUT
+      - API_CHECK:
+          requires:
+            - BUILD
+      - TEST:
+          requires:
+            - CHECKOUT # TODO: Also require build?
+
+  # MERGE TO MAIN
+  TEST_AND_RELEASE:
+    jobs:
+      - CHECKOUT:
+          filters:
+            branches:
+              only:
+                - main
+                - beta
+      - BUILD:
+          requires:
+            - CHECKOUT
+      - TEST:
+          requires:
+            - CHECKOUT
+      - NPM_PUBLISH:
+          requires:
+            - BUILD
+            - TEST
+
+# VS Code Extension Version: 1.5.1
